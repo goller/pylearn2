@@ -9,8 +9,9 @@ __maintainer__ = "Steven Kearnes"
 
 try:
     import h5py
+    import tables
 except ImportError:
-    h5py = None
+    tables = None
 import numpy as np
 import warnings
 
@@ -44,9 +45,9 @@ class HDF5Dataset(DenseDesignMatrix):
     def __init__(self, filename, X=None, topo_view=None, y=None,
                  load_all=False, **kwargs):
         self.load_all = load_all
-        if h5py is None:
-            raise RuntimeError("Could not import h5py.")
-        self._file = h5py.File(filename)
+        if tables is None:
+            raise RuntimeError("Could not import tables.")
+	self._file = tables.open_file(filename, 'r')
         if X is not None:
             X = self.get_dataset(X, load_all)
         if topo_view is not None:
@@ -96,10 +97,9 @@ class HDF5Dataset(DenseDesignMatrix):
             If true, load dataset into memory.
         """
         if load_all:
-            data = self._file[dataset][:]
+            data = self._file.getNode('/'+dataset)[:]
         else:
-            data = self._file[dataset]
-            data.ndim = len(data.shape)  # hdf5 handle has no ndim
+            data = self._file.getNode('/'+dataset)
         return data
 
     def iterator(self, *args, **kwargs):
@@ -201,17 +201,12 @@ class HDF5DatasetIterator(FiniteDatasetIterator):
         """
         next_index = self._subset_iterator.next()
 
-        # convert to boolean selection
-        sel = np.zeros(self.num_examples, dtype=bool)
-        sel[next_index] = True
-        next_index = sel
-
         rval = []
         for data, fn in safe_izip(self._raw_data, self._convert):
             try:
-                this_data = data[next_index]
-            except TypeError:
                 this_data = data[next_index, :]
+            except IndexError:
+                this_data = data[next_index]
             if fn:
                 this_data = fn(this_data)
             assert not contains_nan(this_data)
