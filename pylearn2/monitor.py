@@ -21,7 +21,7 @@ from theano.printing import var_descriptor
 from pylearn2.config import yaml_parse
 from pylearn2.datasets.dataset import Dataset
 from pylearn2.space import Space, CompositeSpace, NullSpace
-from pylearn2.utils import function, sharedX, safe_zip, safe_izip
+from pylearn2.utils import function, sharedX, safe_zip, safe_izip, as_floatX
 from pylearn2.utils.exc import reraise_as
 from pylearn2.utils.iteration import is_stochastic
 from pylearn2.utils.data_specs import DataSpecsMapping
@@ -424,13 +424,15 @@ class Monitor(object):
                                           self._num_batches, self._batch_size)]
         self.num_examples = [np.cast[config.floatX](float(i.num_examples))
                              for i in it]
+        self.num_examples = [float(i.num_examples) for i in it]
+
         givens = [OrderedDict() for d in self._datasets]
         updates = [OrderedDict() for d in self._datasets]
         for i, channel in enumerate(self.channels.values()):
             index = self._datasets.index(channel.dataset)
             d = self._datasets[index]
             g = givens[index]
-            cur_num_examples = self.num_examples[index]
+            inv_cur_num_examples = as_floatX(1./self.num_examples[index])
             u = updates[index]
 
             # Flatten channel.graph_input and the appropriate part of
@@ -459,7 +461,7 @@ class Monitor(object):
                     raise ValueError("Iterating over 0 examples results in " +
                                      "divide by 0")
                 val = (channel.val * T.cast(batch_size, config.floatX)
-                       / cur_num_examples)
+                       * inv_cur_num_examples)
             u[channel.val_shared] = channel.val_shared + val
 
         with log_timing(log, "Compiling accum"):
